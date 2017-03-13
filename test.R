@@ -2,7 +2,13 @@ library(RPostgreSQL)
 library(dplyr)
 library(cism)
 
-# Read the crednetials
+# Read the credentials
+# This requires a yaml with the following fields
+# # dhis2_db_dbname
+# # dhis2_db_hos,
+# # dhis2_db_port
+# # dhis2_db_username
+# # dhis2_db_password
 credentials <- cism::credentials_extract()
 credentials <- credentials[grepl('dhis2_db', names(credentials))]
 
