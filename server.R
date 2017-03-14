@@ -155,20 +155,33 @@ function(input, output, session) {
                      upr = upr,
                      lwr = lwr)
     df$value <- (df$upr + df$lwr) / 2
+    df$Location <- 'Magude'
+    
+    right <- df %>%
+      mutate(Location = 'Manhiça') %>%
+      mutate(upr = (upr * 3) + rnorm(n = nrow(df), mean =0, sd = 1),
+             lwr = (lwr * 2) - rnorm(n = nrow(df), mean = 0, sd = 1)) %>%
+      mutate(value = (upr + lwr) / 2)
+    df <- bind_rows(df, right)
+    
     ggplot(data = df,
            aes(x = date,
                y= value,
                ymax = upr,
-               ymin = lwr)) +
-      geom_line(lwd = 2, alpha = 0.6,
-                color = 'darkred') +
-      geom_linerange(alpha = 0.6,
-                     color = 'darkred') +
+               ymin = lwr,
+               group = Location,
+               fill = Location)) +
+      geom_line(alpha = 0.6) +
+      geom_ribbon(alpha = 0.3) +
+      # geom_line(lwd = 2, alpha = 0.6) +
+      # geom_linerange(alpha = 0.6) +
       theme_economist() +
-      labs(title = 'Predicted Magude malaria cases',
-           subtitle = 'Based on meterological model',
+      labs(title = 'Predicted malaria incidence',
+           subtitle = 'Based on meterological model, 95% uncertainty bands',
            x = 'Date',
-           y = 'Cases')
+           y = 'Incidence') +
+      scale_fill_manual(name = '',
+                         values = c('darkorange', 'darkgreen'))
   })
   
   
@@ -244,6 +257,28 @@ function(input, output, session) {
       icon = icon("fire", lib = "glyphicon"),
       subtitle = 'cases averted last month (relative to Manhiça)')})
   
+  output$prediction <- renderValueBox({
+    valueBox(
+      value = 'STABLE',
+      color = 'green',
+      icon = icon("flag", lib = "glyphicon"),
+      subtitle = 'Malaria cases prediction over next two weeks')})
+  
+  output$evaluation <- renderValueBox({
+    valueBox(
+      value = '91%',
+      color = 'green',
+      icon = icon("thumbs-up", lib = "glyphicon"),
+      subtitle = 'model accuracy over last two weeks')})
+  
+  output$historical <- renderValueBox({
+    valueBox(
+      value = '-7%',
+      color = 'orange',
+      icon = icon("hand-down", lib = "glyphicon"),
+      subtitle = 'overall model underprediction over last month')})
+  
+  
   
   output$bubbles_plot <- renderBubbles({
     if (nrow(district()) == 0){
@@ -270,6 +305,7 @@ function(input, output, session) {
                             'Place B', 
                             'Place C'),
                scenario = c(2, 2, 3))
+    out <- out %>% left_join(scenarios_df)
     names(out) <- toupper(names(out))
     out
   }, digits = 1)

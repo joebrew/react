@@ -14,6 +14,12 @@ library(RPostgreSQL)
 library(dplyr)
 library(cism)
 
+# Create a dataframe of scenarios
+scenarios_df <- 
+  data_frame(scenario = 1:3,
+             description = c('Large-scale MDA',
+                             'Focal MDA',
+                             'Household MDA with radial extension'))
 
 # Read in dashboard data
 district_static <- fromJSON(txt = 'data/dashboard.json')
@@ -120,6 +126,8 @@ if(file_name %in% dir('data/')){
   
 x <- dbGetQuery(psql_connection, query)
 
+# Filter so that it's all after 23 February
+
 # Spread the data
 dhis2 <- spread(x %>%
               dplyr::select(code, value, programstageinstanceid),
@@ -128,6 +136,8 @@ dhis2 <- spread(x %>%
 save(dhis2,
      file = paste0('data/', 
                    file_name))
+
+
 }
 
 # psql -h 172.16.236.244 -p 5432 -U jbrew dhis2
