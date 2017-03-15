@@ -90,54 +90,62 @@ if(file_name %in% dir('data/')){
                                port = credentials$dhis2_db_port,
                                user = credentials$dhis2_db_username,
                                password = credentials$dhis2_db_password)
-  
-  query <- 
-    paste0('SELECT j.code,
-           j.name,  ', # nome da viariavel
-           'j.dataelementid, ',
-           'j.value, ', # valor da variavel
-           'j.programstageinstanceid, ', # identificador de inquerito
-           'j.latitude, ',
-           'j.longitude, ',
-           'j.organisationunitid, ', # identificador de unidade sanitaria
-           'k.completeddate, ', #dia do inquerito
-           'k.enrollmentdate, ', # dia da visita
-           'k.trackedentityinstanceid ', # identificador de unidade sanitaria
-           'FROM (
-           SELECT
-           e.code,
-           e.name,
-           e.dataelementid,
-           f.value,
-           f.programstageinstanceid,
-           g.latitude,
-           g.longitude,
-           g.organisationunitid
-           
-           
-           FROM dataelement e INNER JOIN trackedentitydatavalue f ON e.dataelementid = f.dataelementid
-           INNER JOIN programstageinstance g ON f.programstageinstanceid = g.programstageinstanceid
-           
-    ) j
-           INNER JOIN (
-           SELECT *
-           FROM programstageinstance h INNER JOIN programinstance i ON h.programinstanceid = i.programinstanceid
-           ) k ON j.programstageinstanceid = k.programstageinstanceid;')
+
+  # Amone's query  
+query <- paste0("SELECT a.programinstanceid, a.created, a.enrollmentdate, a.incidentdate, a.trackedentityinstanceid, a.programid,
+       a.organisationunitid, a.latitude, a.longitude, b.programstageinstanceid, c.value attributevalue, d.code attributecode, d.name attributename,
+       e.value dataelementvalue, f.code dataelementcode, f.name dataelementname
+FROM programinstance a LEFT JOIN programstageinstance b ON a.programinstanceid = b.programinstanceid
+  LEFT JOIN trackedentityattributevalue c ON a.trackedentityinstanceid = c.trackedentityinstanceid
+  LEFT JOIN trackedentityattribute d ON c.trackedentityattributeid = d.trackedentityattributeid
+  LEFT JOIN trackedentitydatavalue e ON e.programstageinstanceid = b.programstageinstanceid
+  LEFT JOIN dataelement f ON e.dataelementid = f.dataelementid")
   
 x <- dbGetQuery(psql_connection, query)
-
+save(x, file = '~/Desktop/temp.RData')
 # Filter so that it's all after 23 February
+x <- x %>%
+  filter(incidentdate > '2017-02-23')
 
-# Spread the data
-dhis2 <- spread(x %>%
-              dplyr::select(code, value, programstageinstanceid),
-            key = code,
-            value = value)
-save(dhis2,
+# Loop through each program id and make dataframes
+programids <- sort(unique(x$programid))
+
+for (i in 1:length(programids)){
+  message(i)
+  # Get the program id
+  this_programid <- programids[i]  
+  # Subset just for this programid
+  this_program <- x %>% filter(programid == this_programid)
+  # Spread
+  out <- this_program %>%
+    dplyr::select(attributename,
+                  attributevalue,
+                  programstageinstanceid,
+                  enrollmentdate,
+                  dataelementcode,
+                  dataelementvalue) %>%
+    rename(date = enrollmentdate)
+  # Remove duplicate rows
+  out <- out %>% distinct(attributename,
+                          attributevalue,
+                          programstageinstanceid,
+                          dataelementcode,
+                          dataelementvalue,
+                          .keep_all = TRUE)
+  out <- spread(data = out,
+                key = dataelementcode,
+                value = dataelementvalue)
+  assign(paste0('program_id_',
+                this_programid),
+         out,
+         envir = .GlobalEnv)
+}
+
+save(program_id_277797,
+     program_id_71885,
+     program_id_71914,
      file = paste0('data/', 
                    file_name))
-
-
 }
 
 # psql -h 172.16.236.244 -p 5432 -U jbrew dhis2
