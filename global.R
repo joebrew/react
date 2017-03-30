@@ -1,5 +1,4 @@
 # the_date <- Sys.Date()
-the_date <- max(case_index$date, na.rm = TRUE) + 1
 library(tidyverse)
 library(jsonlite)
 library(shiny)
@@ -15,7 +14,7 @@ library(cism)
 library(RPostgreSQL)
 library(dplyr)
 library(cism)
-
+library(sp)
 # Create a dataframe of scenarios
 scenarios_df <- 
   data_frame(scenario = 1:3,
@@ -77,9 +76,9 @@ area_map@data$color <- ifelse(area_map@data$NAME_2 == 'Magude',
 # # dhis2_db_port
 # # dhis2_db_username
 # # dhis2_db_password
-
+this_date <- Sys.Date()
 file_name <- paste0('dhis2_',
-                    the_date,
+                    this_date,
                     '.RData')
 if(file_name %in% dir('data/')){
   load(paste0('data/', file_name))
@@ -97,15 +96,15 @@ if(file_name %in% dir('data/')){
                                password = credentials$dhis2_db_password)
 
   # Amone's query
-query <- paste0("SELECT a.programinstanceid, a.created, a.enrollmentdate, a.incidentdate, a.trackedentityinstanceid, a.programid,
+query <- paste0("SELECT g.name, a.programinstanceid, a.created, a.enrollmentdate, a.incidentdate, a.trackedentityinstanceid, a.programid,
        a.organisationunitid, a.latitude, a.longitude, b.programstageinstanceid, c.value attributevalue, d.code attributecode, d.name attributename,
        e.value dataelementvalue, f.code dataelementcode, f.name dataelementname
 FROM programinstance a LEFT JOIN programstageinstance b ON a.programinstanceid = b.programinstanceid
   LEFT JOIN trackedentityattributevalue c ON a.trackedentityinstanceid = c.trackedentityinstanceid
   LEFT JOIN trackedentityattribute d ON c.trackedentityattributeid = d.trackedentityattributeid
   LEFT JOIN trackedentitydatavalue e ON e.programstageinstanceid = b.programstageinstanceid
-  LEFT JOIN dataelement f ON e.dataelementid = f.dataelementid")
-
+  LEFT JOIN dataelement f ON e.dataelementid = f.dataelementid
+  LEFT JOIN organisationunit g on a.organisationunitid = g.organisationunitid")
 x <- dbGetQuery(psql_connection, query)
 save(x, file = '~/Desktop/temp.RData')
 # # Filter so that it's all after 23 February
@@ -134,7 +133,8 @@ for (i in 1:length(programids)){
                   programstageinstanceid,
                   enrollmentdate,
                   dataelementcode,
-                  dataelementvalue) %>%
+                  dataelementvalue,
+                  organisationunitid) %>%
     rename(date = enrollmentdate)
   # Remove duplicate rows
   out <- out %>% distinct(attributename,
@@ -192,6 +192,8 @@ membros_static <- program_id_71914
 
 # Clean up magude data
 case_index_static$date <- as.Date(case_index_static$date)
+the_date <- max(case_index_static$date, na.rm = TRUE) + 1
+
 case_index_static$last_week <- case_index_static$date >= the_date - 6
 case_index_static$`Numero de agregado` <- 
   unlist(lapply(strsplit(x = case_index_static$`Identificação Permanente (PermID)`, split = '-'), function(x){paste0(x[1], '-', x[2])}))
@@ -199,6 +201,8 @@ agregados_static$date <- as.Date(agregados_static$date)
 agregados_static$last_week <- agregados_static$date >= the_date - 6
 membros_static$date <- as.Date(membros_static$date)
 membros_static$last_week <- membros_static$date >= the_date - 6
+
+
 
 # Create an object of all cases
 magude_cases_all <- 
@@ -237,6 +241,7 @@ magude_cases_by_hf <-
   summarise(n = sum(n))
 
 # Shift the dates in district_static up
-date_shift <- as.numeric(max(case_index$date, na.rm = TRUE) -
+date_shift <- as.numeric(max(case_index_static$date, na.rm = TRUE) -
   max(district_static$date, na.rm = TRUE))
 district_static$date <- district_static$date + date_shift
+
