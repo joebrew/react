@@ -5,10 +5,12 @@ dashboardPage(
   sidebar = dashboardSidebar(
     sliderInput("days", 
                 "View data from the last n days:",
-                min = 0, max = 100, value = 3, step = 1),
+                min = 0, max = 100, value = 30, step = 1),
     sidebarMenu(
-      menuItem("Dashboard", tabName = "dashboard"),
+      menuItem("General", tabName = "general"),
       menuItem('React', tabName = 'react'),
+      menuItem('React intervention', tabName = 'react_intervention'),
+      menuItem('Malaria in pregnancy', tabName = 'pregnancy'),
       menuItem('Malaria forecast', tabName = 'forecast'),
       menuItem("Raw data", tabName = "rawdata"),
       menuItem("About", tabName = "about")
@@ -16,11 +18,11 @@ dashboardPage(
   ),
   body = dashboardBody(
     tabItems(
-      tabItem("dashboard",
+      tabItem("general",
               fluidRow(
-                valueBoxOutput("cases"),
-                valueBoxOutput("cases_range"),
-                valueBoxOutput('deaths')
+                valueBoxOutput("cases_manhica"),
+                valueBoxOutput("cases_magude"),
+                valueBoxOutput("cases_range")
               ),
               fluidRow(
                 # leafletOutput('leaflet_map'),
@@ -44,9 +46,21 @@ dashboardPage(
       ),
       tabItem("react",
               fluidRow(
-                valueBoxOutput('action'),
-                valueBoxOutput('deviation'),
+                valueBoxOutput('index_cases'),
+                valueBoxOutput('hh'),
                 valueBoxOutput('reduction')),
+              fluidRow(
+                column(6,
+                       plotOutput('magude_trend')),
+                column(6,
+                       plotOutput('magude_by_health_facility'))
+              ),
+              fluidRow(
+                column(6,
+                       leafletOutput('magude_map')),
+                column(6,
+                       plotOutput('magude_trend_by_health_facility'))
+              ),
               fluidRow(
                 box(
                   width = 4, 
@@ -67,6 +81,30 @@ dashboardPage(
 
               )
       ),
+      tabItem("react_intervention",
+              fluidRow(valueBoxOutput("cases_imported"),
+                       valueBoxOutput("cases_not_followed_up"),
+                       valueBoxOutput("cases_not_followed_up_more_7")),
+              fluidRow(
+                column(2),
+                column(8,
+                       plotOutput('hf_details')),
+                column(2)
+              ),
+              fluidRow(
+                column(6,
+                       h3('Follow-up status'),
+                       leafletOutput('react_map_case_type')),
+                column(6,
+                       h3('Imported cases'),
+                       leafletOutput('react_map_import'))
+              )),
+      tabItem("pregnancy",
+              fluidRow(
+                column(6,
+                       p('Pending design input from Alfredo.')),
+                column(6)
+              )),
       tabItem("forecast",
               fluidRow(
                 valueBoxOutput('prediction'),

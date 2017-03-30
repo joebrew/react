@@ -13,6 +13,23 @@ function(input, output, session) {
       filter(malaria)
   })
   
+  # Get reactive objects for magude stuff
+  case_index <- reactive({
+    case_index_static %>%
+      filter(date >= yesterday - (input$days - 1),
+             date < today)
+  })
+  agregados <- reactive({
+    agregados_static %>%
+      filter(date >= yesterday - (input$days - 1),
+             date < today)
+  })
+  membros <- reactive({
+    membros_static %>%
+      filter(date >= yesterday - (input$days - 1),
+             date < today)
+  })
+  
   # Number of days back
   n_days <- reactive({
     input$days
@@ -97,6 +114,97 @@ function(input, output, session) {
   }
   )
   
+  # Render a trend chart for Magude
+  output$magude_trend <- 
+    renderPlot({
+      ggplot(data = magude_cases_all,
+             aes(x = date,
+                 y = n)) +
+        geom_area(fill = 'darkorange', 
+                  alpha = 0.6,
+                  color = 'black') +
+        geom_point(color = 'black', alpha = 0.7, size = 0.2) +
+        labs(x = 'Date',
+             y = 'Cases',
+             title = 'Trend',
+             subtitle = 'All Magude cases (index + actively detected)') +
+        theme_fivethirtyeight()
+    })
+  
+  # Plot of cases by health facility magude
+  output$magude_by_health_facility <- 
+    renderPlot({
+      x <- magude_cases_by_hf %>%
+        filter(date >= today - 30) %>%
+        group_by(administrativePost) %>%
+        summarise(n = sum(n))
+      
+      ggplot(data = x,
+             aes(x = administrativePost,
+                 y = n)) +
+        geom_bar(stat = 'identity',
+                 fill = 'darkorange',
+                 alpha = 0.6,
+                 color = 'black') +
+        labs(title = 'Cases by administrative post',
+             subtitle = 'Last 30 days',
+             x = 'Administrative post',
+             y = 'Cases') +
+        geom_hline(yintercept = (10 / 7) * 30,
+                   lty = 2,
+                   alpha = 0.6) +
+        theme_fivethirtyeight()
+      
+    })
+  
+  # magude cases map
+  output$magude_map <- 
+    renderLeaflet({
+      mag <- area_map[area_map$NAME_2 == 'Magude',]
+      fake_data <- coordinates(mag)
+      fake_data <- data.frame(fake_data)
+      names(fake_data) <- c('lng', 'lat')
+      nrf <- nrow(fake_data)
+      for (i in 1:100){
+        fake_data[nrf + i,] <-
+          c(jitter(fake_data$lng[sample(1:nrf,1)]),
+            jitter(fake_data$lat[sample(1:nrf,1)]))
+      }
+      
+      l <- leaflet() %>%
+        addPolygons(data = mag,
+                    color = 'blue',
+                    weight = 2) %>%
+        addProviderTiles(providers$Esri.WorldStreetMap) %>%
+        addMarkers(lng = fake_data$lng,
+                   lat = fake_data$lat,
+                   # clusterId = "quakesCluster",
+                   clusterOptions = markerClusterOptions()) %>%
+        addMiniMap(
+          tiles = providers$Esri.WorldStreetMap,
+          toggleDisplay = TRUE) %>%
+        addLegend("topleft",colors = NA,
+                  labels = ' ',
+                  title = "Cases (fake)",
+                  opacity = 1)
+      l
+    })
+  
+  # magude_trend_by_health_facility
+  output$magude_trend_by_health_facility <- renderPlot({
+    x <- magude_cases_by_hf
+    ggplot(data = x,
+           aes(x = date,
+               y = n)) +
+      geom_line(alpha = 0.6) +
+      geom_point(alpha = 0.7) +
+      facet_wrap(~administrativePost) +
+      theme_fivethirtyeight() +
+      labs(title = 'Trends by health facility',
+           subtitle = 'Magude') +
+      theme(axis.text.x = element_text(angle = 90, hjust = 1))
+  })
+  
   # Render a map for react
   output$react_map <-
     renderLeaflet({
@@ -120,6 +228,115 @@ function(input, output, session) {
       l
     }
     )
+  
+  # Render a map for react case type
+  output$react_map_case_type <-
+    renderLeaflet({
+      mag <- area_map[area_map$NAME_2 == 'Magude',]
+      fake_data <- coordinates(mag)
+      fake_data <- data.frame(fake_data)
+      names(fake_data) <- c('lng', 'lat')
+      nrf <- nrow(fake_data)
+      for (i in 1:100){
+        fake_data[nrf + i,] <-
+          c(jitter(fake_data$lng[sample(1:nrf,1)]),
+            jitter(fake_data$lat[sample(1:nrf,1)]))
+      }
+      fake_data$type <-
+        sample(c('Followed-up',
+                 'Not followed-up',
+                 'Member'),
+               nrow(fake_data),
+               replace = TRUE)
+      l <- cism_map_interactive(fake_data$lng,
+                                fake_data$lat,
+                                x = fake_data$type,
+                                spdf = mag)%>%
+        addMiniMap(
+          tiles = providers$Esri.WorldStreetMap,
+          toggleDisplay = TRUE)
+      l
+    }
+    )
+  
+  # Render a map for react import
+  output$react_map_import <-
+    renderLeaflet({
+      mag <- area_map[area_map$NAME_2 == 'Magude',]
+      fake_data <- coordinates(mag)
+      fake_data <- data.frame(fake_data)
+      names(fake_data) <- c('lng', 'lat')
+      nrf <- nrow(fake_data)
+      for (i in 1:100){
+        fake_data[nrf + i,] <-
+          c(jitter(fake_data$lng[sample(1:nrf,1)]),
+            jitter(fake_data$lat[sample(1:nrf,1)]))
+      }
+      fake_data$type <-
+        sample(c('Indigenous',
+                 'Imported'),
+               nrow(fake_data),
+               replace = TRUE)
+      l <- cism_map_interactive(fake_data$lng,
+                                fake_data$lat,
+                                x = fake_data$type,
+                                spdf = mag)%>%
+        addMiniMap(
+          tiles = providers$Esri.WorldStreetMap,
+          toggleDisplay = TRUE)
+      l
+    }
+    )
+  
+  #   Per health facility (for scenario 3):
+  # - For each index case,
+  # - how many were followed up?
+  # - how many were treated, etc.
+  # - how many imported vs. indigenous
+  
+  output$hf_details <- renderPlot({
+    x <- case_index()
+    # # Get whether followed up or not
+    x$followed_up <-
+      x$`Numero de agregado` %in% membros()$`Numero de agregado`
+    # Randomly create how many secondary cases and how import cases, etc.
+    x$secondary_cases <- sample(c(NA, 0, 1, 2, 3),
+                                size = nrow(x),
+                                prob = c(5, 5, 2, 1, 1),
+                                replace = TRUE)
+    # How many imported
+    x$import <- ifelse(is.na(x$secondary_cases), NA, 0)
+
+    # create plot data
+    plot_data <- x %>%
+      filter(date >= today - 30) %>%
+      group_by(administrativePost) %>%
+      summarise(index_cases = n(),
+                followed_up = length(which(followed_up)),
+                secondary_cases = sum(secondary_cases, na.rm = TRUE),
+                imported_cases = sum(import, na.rm = TRUE))
+
+    # make long
+    long_data <- gather(plot_data,
+                        key,
+                        value,
+                        index_cases: imported_cases)
+    cols <- colorRampPalette(brewer.pal(9, 'Spectral'))(length(unique(long_data$key)))
+    long_data$key <- gsub('_', ' ', long_data$key)
+    ggplot(data = long_data,
+           aes(x = administrativePost,
+               y = value,
+               group = key,
+               fill = key)) +
+      geom_bar(stat = 'identity',
+               position = 'dodge') +
+      scale_fill_manual(name = '',
+                        values = cols) +
+      theme_fivethirtyeight() +
+      labs(title = 'Action by health facility',
+           subtitle = 'Last 30 days')
+    
+  })
   
   # Render a map for forecast
   output$forecast_map <-
@@ -206,14 +423,26 @@ function(input, output, session) {
   })
   
   # Number of cases yesterday
-  output$cases <- renderValueBox({
+  output$cases_manhica <- renderValueBox({
     dd <- malaria()
     dd <- dd %>% filter(date == yesterday)
-    st <- ifelse(nrow(dd) == 1, 'malaria case yesterday',
-                 'malaria cases yesterday')
+    st <- ifelse(nrow(dd) == 1, 'Manhiça malaria case yesterday',
+                 'Manhiça malaria cases yesterday')
     valueBox(
       value = nrow(dd),
       color = 'red',
+      icon = icon("users"),
+      subtitle = st)})
+  
+  output$cases_magude <- renderValueBox({
+    x <- magude_cases_all$n[magude_cases_all$date == yesterday]
+    y <- ifelse(is.na(x), 0, x)
+    y <- ifelse(length(y) == 0, 0, y)
+    st <- ifelse(y == 1, 'Magude malaria case yesterday',
+                 'Magude malaria cases yesterday')
+    valueBox(
+      value = y,
+      color = 'green',
       icon = icon("users"),
       subtitle = st)})
   
@@ -229,26 +458,25 @@ function(input, output, session) {
       icon = icon("stats", lib = 'glyphicon'),
       subtitle = st)})
   
-  output$deaths <- renderValueBox({
+  output$index_cases <- renderValueBox({
     valueBox(
-      value = 0,
-      color = 'olive',
-      icon = icon("skull", lib = "glyphicon"),
-      subtitle = paste0('deaths over last ', input$days, ' days'))})
+      value = nrow(case_index()),
+      color = 'red',
+      icon = icon("user", lib = "glyphicon"),
+      subtitle = paste0('index cases over last ',
+                        input$days,
+                        ' days'))})
   
-  output$action <- renderValueBox({
+  output$hh <- renderValueBox({
+    
+    index_cases_visited <- 
+      length(which(agregados()$`Numero identificador de caso index` %in% case_index()$nid))
+    
     valueBox(
-      value = 5,
-      color = 'blue',
-      icon = icon("home", lib = "glyphicon"),
-      subtitle = 'households require immediate action')})
-  
-  output$deviation <- renderValueBox({
-    valueBox(
-      value = 2,
+      value = index_cases_visited,
       color = 'yellow',
-      icon = icon("fire", lib = "glyphicon"),
-      subtitle = 'health facilities have deviated from protocol')})
+      icon = icon("home", lib = "glyphicon"),
+      subtitle = 'of those households already visited')})
   
   output$reduction <- renderValueBox({
     valueBox(
@@ -278,6 +506,29 @@ function(input, output, session) {
       icon = icon("hand-down", lib = "glyphicon"),
       subtitle = 'overall model underprediction over last month')})
   
+  # 
+  # fluidRow(valueBoxOutput("cases_imported"),
+  #          valueBoxOutput("cases_not_followed_up"),
+  #          valueBoxOutput("cases_not_followed_up_more_7")),
+  
+  output$cases_imported <- renderValueBox({
+    valueBox(
+      value = '7',
+      color = 'orange',
+      icon = icon("user", lib = "glyphicon"),
+      subtitle = 'cases imported over last 30 days')})
+  output$cases_not_followed_up <- renderValueBox({
+    valueBox(
+      value = '20 of 46',
+      color = 'orange',
+      icon = icon("hand-down", lib = "glyphicon"),
+      subtitle = 'cases not followed up over last 30 days')})
+  output$cases_not_followed_up_more_7 <- renderValueBox({
+    valueBox(
+      value = '12',
+      color = 'orange',
+      icon = icon("arrow-up", lib = "glyphicon"),
+      subtitle = '+ 30 day-old cases not followed up')})
   
   
   output$bubbles_plot <- renderBubbles({
