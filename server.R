@@ -3,8 +3,8 @@ function(input, output, session) {
   # Get a reactive object of district
   district <- reactive({
     district_static %>%
-      filter(date >= yesterday - (input$days - 1),
-             date < today)
+      filter(date >= input$date_range[1] & 
+               date <= input$date_range[2])
   })
   
   # Get a reactive object for malaria
@@ -16,23 +16,96 @@ function(input, output, session) {
   # Get reactive objects for magude stuff
   case_index <- reactive({
     case_index_static %>%
-      filter(date >= yesterday - (input$days - 1),
-             date < today)
+      filter(date >= input$date_range[1] & 
+               date <= input$date_range[2])
   })
   agregados <- reactive({
     agregados_static %>%
-      filter(date >= yesterday - (input$days - 1),
-             date < today)
+      filter(date >= input$date_range[1] & 
+               date <= input$date_range[2])
   })
   membros <- reactive({
     membros_static %>%
-      filter(date >= yesterday - (input$days - 1),
-             date < today)
+      filter(date >= input$date_range[1] & 
+               date <= input$date_range[2])
   })
   
-  # Number of days back
+  index_and_membros <- reactive({
+    dont_change <- c(
+      # 'date', 
+      # 'name', 
+      # 'type',
+      'Numero de agregado')#,
+      # 'Nome', 
+      # 'Apelido')
+    x <- membros() %>%
+      mutate(type = 'Secondary') %>%
+      dplyr::select(`Numero de agregado`,
+                    type,
+                    date,
+                    name,
+                    Nome,
+                    Apelido,
+                    react_b_age,
+                    `Identificação Permanente (PermID)`)
+    names(x)[!names(x) %in% dont_change] <-
+      paste0('secondary_', names(x)[!names(x) %in% dont_change])
+    y <- case_index() %>%
+      mutate(type = 'Index') %>%
+      dplyr::select(`Numero de agregado`,
+                    type,
+                    date,
+                    name,
+                    Nome,
+                    Apelido,
+                    # longitude,
+                    # latitude,
+                    additionalInfo,
+                    administrativePost,
+                    age,
+                    gender,
+                    headPhone,
+                    index_travel_time,
+                    isResident,
+                    locality,
+                    telephone,
+                    `Numero identificador de caso index`)
+    names(y)[!names(y) %in% dont_change] <-
+      paste0('index_', names(y)[!names(y) %in% dont_change])    
+    joined <- full_join(x,
+                        y,
+                        by = dont_change)
+    joined$type <- 
+      ifelse(!is.na(joined$index_type), 'Index', 'Secondary')
+    
+    # Get coordinates
+    joined <-
+      joined %>%
+      left_join(agregados_static %>%
+                  filter(!duplicated(`Numero de agregado`)) %>%
+                  dplyr::select(`Numero de agregado`,
+                                longitude,
+                                latitude))
+    
+    joined
+    })
+  
+# Raw data for download
+  raw_data <- reactive({
+    if(input$which_data == 'Index only'){
+      the_data <- case_index()
+    } else if(input$which_data == 'Secondary only') {
+      the_data <- membros()
+    } else {
+      the_data <- index_and_membros()
+    }
+    the_data
+  })
+  
+    # Number of days back
   n_days <- reactive({
-    input$days
+    as.numeric(input$date_range[2] - 
+                 input$date_range[1]) + 1
   })
   # Text for number of days back
   output$n_days_text <- renderText({
@@ -45,12 +118,98 @@ function(input, output, session) {
   n_missing_geo <- reactive({
     length(which(is.na(malaria()$lng)))
   })
+  
+  # Magude cases all 2 reactive
+  magude_cases_all_2_reactive_agg <- reactive({
+    x <- magude_cases_all_2 %>%
+      filter(index) %>%
+      group_by(date = date_week) %>%
+      summarise(n = sum(n))
+    x <- x %>%
+      filter(date >= input$date_range[1],
+             date <= input$date_range[2])
+    x
+  })
+  
+  magude_b <- reactive({
+    x <- magude_cases_all_2 %>%
+      filter(!index)
+    x <- x %>%
+      group_by(date = date_week) %>%
+      summarise(n = sum(n))
+    x <- x %>%
+      filter(date >= input$date_range[1],
+             date <= input$date_range[2])
+    x
+  })
+  
+  magude_c <- reactive({
+    x <- magude_cases_all_2 %>%
+      filter(!index)
+    x <- x %>%
+      filter(date >= input$date_range[1],
+             date <= input$date_range[2])
+    x
+  })
+  
+  magude_d <- reactive({
+    x <- magude_index_cases_by_hf %>%
+      # filter(format(date, '%B') %in% input$month) %>%
+      filter(date >= input$date_range[1] & 
+               date <= input$date_range[2]) %>%
+      mutate(name = gsub('Centro de Saude de |Centro de Saúde de ', '', name)) %>%
+      group_by(name) %>%
+      summarise(n = sum(n))
+    x
+  })
+  
+  magude_e <- reactive({
+    x <- magude_member_cases_by_health_facility %>%
+      # filter(format(date, '%B') %in% input$month) %>%
+      filter(date >= input$date_range[1] & 
+               date <= input$date_range[2]) %>%
+      mutate(name = gsub('Centro de Saude de |Centro de Saúde de ', '', name)) %>%
+      group_by(name) %>%
+      summarise(n = sum(n))
+    x
+  })
+  
+  date_range <- reactive({
+    input$date_range
+  })
+  
   # Text output for missing geo
   output$n_missing_geo_text <- renderText({
     paste0('Excluding those ',
            n_missing_geo(),
            ' with no geographic information')
   })
+  
+  # Render a risk map
+  output$risk_map <- renderPlot({
+    # Get locations of index cases
+    x <- case_index_static %>%
+      dplyr::select(date,
+                    longitude,
+                    latitude)
+    ggplot() +
+      geom_polygon(data = mag_map_fortified,
+                   aes(x = long,
+                       y = lat,
+                       group = group),
+                   fill = 'blue',
+                   alpha = 0.2,
+                   color = 'black') +
+      coord_map() +
+      geom_jitter(data=x, 
+                 aes(x=longitude, y=latitude),
+                 size = 1,
+                 alpha = 0.3,
+                 color = 'darkred') +
+      theme_cism_map() +
+      labs(title = 'Risk map',
+           subtitle = 'Under construction')
+    })
   
   # Render a time series chart
   output$ts <- renderPlot({
@@ -106,10 +265,10 @@ function(input, output, session) {
                    style = list(color = "#FF0000", 
                                 weight = 1)) %>%
       addLayersControl(overlayGroups = c("Graticule"),
-                       options = layersControlOptions(collapsed = FALSE)) %>%
-      addMiniMap(
-        tiles = providers$Esri.WorldStreetMap,
-        toggleDisplay = TRUE)
+                       options = layersControlOptions(collapsed = FALSE)) #%>%
+      # addMiniMap(
+      #   tiles = providers$Esri.WorldStreetMap,
+      #   toggleDisplay = TRUE)
       l
   }
   )
@@ -117,44 +276,150 @@ function(input, output, session) {
   # Render a trend chart for Magude
   output$magude_trend <- 
     renderPlot({
-      ggplot(data = magude_cases_all,
+      x <- magude_cases_all_2_reactive_agg()
+      ggplot(data = x,
              aes(x = date,
                  y = n)) +
-        geom_area(fill = 'darkorange', 
-                  alpha = 0.6,
-                  color = 'black') +
-        geom_point(color = 'black', alpha = 0.7, size = 0.2) +
+        geom_bar(stat = 'identity',
+                 fill = 'darkorange',
+                 color = 'black',
+                 alpha = 0.6) +
         labs(x = 'Date',
              y = 'Cases',
-             title = 'Trend',
-             subtitle = 'All Magude cases (index + actively detected)') +
-        theme_fivethirtyeight()
+             title = 'Trend: index cases',
+             subtitle = 'Magude, passively detected cases (index) only') +
+        theme_fivethirtyeight() +
+        geom_label(aes(label = n))
     })
   
-  # Plot of cases by health facility magude
-  output$magude_by_health_facility <- 
+  
+  
+  # Render a trend chart for Magude with 2 lines (index or not)
+  output$magude_trend_2 <- 
     renderPlot({
-      x <- magude_cases_by_hf %>%
-        filter(date >= today - 30) %>%
-        group_by(administrativePost) %>%
-        summarise(n = sum(n))
+      x <- magude_cases_all_2_reactive_agg()
+      ggplot(data = x,
+             aes(x = date,
+                 y = n)) +
+        geom_line(alpha = 0.6) +
+        geom_point(alpha = 0.6) +
+        labs(x = 'Date',
+             y = 'Cases',
+             title = 'Detailed trend: index cases',
+             subtitle = 'Magude, index cases only') +
+        theme_fivethirtyeight() +
+        xlim(range(magude_cases_all_2$date))
+    })
+  
+  # Render a trend bar chart for magude for only active cases
+  output$magude_trend_4 <- 
+    renderPlot({
+      x <- magude_b()
+      ggplot(data = x,
+             aes(x = date,
+                 y = n)) +
+        geom_bar(stat = 'identity',
+                 alpha = 0.6,
+                 fill = 'darkorange',
+                 color = 'black') +
+        labs(x = 'Date',
+             y = 'Cases',
+             title = 'Trend: members',
+             subtitle = 'Magude, actively detected cases only (non-index)') +
+        theme_fivethirtyeight() +
+        geom_label(aes(label = n))
+    })
+  
+  # Render a trend chart
+  output$magude_trend_3 <- 
+    renderPlot({
+      x <- magude_c()
+      ggplot(data = x,
+             aes(x = date,
+                 y = n)) +
+        geom_line(alpha = 0.6) +
+        geom_point(alpha = 0.6) +
+        labs(x = 'Date',
+             y = 'Cases',
+             title = 'Detailed trend: members',
+             subtitle = 'Magude, actively detected cases only (non-index)') +
+        theme_fivethirtyeight() +
+        xlim(range(magude_cases_all_2$date))
+    })
+  
+  
+  
+  # Plot of cases by health facility magude
+  output$magude_index_by_health_facility <- 
+    renderPlot({
+        x <- magude_d()
       
       ggplot(data = x,
-             aes(x = administrativePost,
+             aes(x = name,
                  y = n)) +
         geom_bar(stat = 'identity',
                  fill = 'darkorange',
                  alpha = 0.6,
                  color = 'black') +
-        labs(title = 'Cases by administrative post',
-             subtitle = 'Last 30 days',
-             x = 'Administrative post',
+        labs(title = 'Index cases by health facility',
+             subtitle = paste0(format(date_range()[1], 
+                                      '%B %d, %Y'), 
+                               ' - ', 
+                               format(date_range()[2], '%B %d, %Y')),
+             x = 'Health facility',
              y = 'Cases') +
         geom_hline(yintercept = (10 / 7) * 30,
                    lty = 2,
                    alpha = 0.6) +
-        theme_fivethirtyeight()
+        theme_fivethirtyeight() +
+        theme(axis.text.x = element_text(angle = 90))
       
+    })
+  
+  # Plot of cases by health facility magude
+  output$magude_member_by_health_facility <- 
+    renderPlot({
+      x <- magude_e()
+      ggplot(data = x,
+             aes(x = name,
+                 y = n)) +
+        geom_bar(stat = 'identity',
+                 fill = 'darkorange',
+                 alpha = 0.6,
+                 color = 'black') +
+        labs(title = 'Member cases by health facility',
+             subtitle = paste0(format(date_range()[1], 
+                                      '%B %d, %Y'), 
+                               ' - ', 
+                               format(date_range()[2], '%B %d, %Y')),
+             x = 'Health facility',
+             y = 'Cases') +
+        geom_hline(yintercept = (10 / 7) * 30,
+                   lty = 2,
+                   alpha = 0.6) +
+        theme_fivethirtyeight() +
+        theme(axis.text.x = element_text(angle = 90))
+      
+    })
+  
+  output$retro_map <- 
+    renderPlot({
+      cols <- colorRampPalette(brewer.pal(9, 'GnBu'))(length(unique(retro$year) ) - 1)
+      cols <- c(cols, 'darkred')
+      ggplot(data = retro, 
+             aes(x = fake_date, y = n, color = year)) +
+        geom_line(alpha = 0.4) +
+        geom_point(alpha = 0.6) +
+        geom_smooth(se = FALSE,
+                    alpha = 0.9) +
+        scale_x_date(labels = date_format("%B")) +
+        theme_fivethirtyeight() +
+        scale_color_manual(name = '',
+                           values = cols) +
+        # scale_y_log10() +
+        labs(title = 'Historical comparison',
+             subtitle = 'Current versus previous years, with locally regressed splines',
+             y = 'Malaria cases') 
     })
   
   # magude cases map
@@ -180,9 +445,9 @@ function(input, output, session) {
                    lat = fake_data$lat,
                    # clusterId = "quakesCluster",
                    clusterOptions = markerClusterOptions()) %>%
-        addMiniMap(
-          tiles = providers$Esri.WorldStreetMap,
-          toggleDisplay = TRUE) %>%
+        # addMiniMap(
+        #   tiles = providers$Esri.WorldStreetMap,
+        #   toggleDisplay = TRUE) %>%
         addLegend("topleft",colors = NA,
                   labels = ' ',
                   title = "Cases (fake)",
@@ -192,17 +457,30 @@ function(input, output, session) {
   
   # magude_trend_by_health_facility
   output$magude_trend_by_health_facility <- renderPlot({
-    x <- magude_cases_by_hf
-    ggplot(data = x,
+    x <- magude_index_cases_by_hf %>% ungroup
+    x$name <- gsub('Centro de Saude de |Centro de Saúde de ',
+                   '', x$name)
+    x <- x %>%
+      group_by(name, date = date_week) %>%
+      summarise(n = sum(n)) %>%
+      ungroup
+    
+    ggplot(data = x %>% 
+             filter(date >= date_range()[1] & 
+                      date <= date_range()[2]),
+             # filter(format(date, '%B') %in% input$month),
            aes(x = date,
                y = n)) +
-      geom_line(alpha = 0.6) +
-      geom_point(alpha = 0.7) +
-      facet_wrap(~administrativePost) +
+      geom_bar(stat = 'identity',
+               alpha = 0.6,
+               fill = 'darkorange',
+               color = 'black') +
+      facet_wrap(~name) +
       theme_fivethirtyeight() +
       labs(title = 'Trends by health facility',
-           subtitle = 'Magude') +
-      theme(axis.text.x = element_text(angle = 90, hjust = 1))
+           subtitle = paste0('Magude: ', paste0(format(date_range()[1], '%B %d, %Y'), ' - ', format(date_range()[2], '%B %d, %Y')))) +
+      theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+      geom_label(aes(label = n))
   })
   
   # Render a map for react
@@ -221,10 +499,10 @@ function(input, output, session) {
                      style = list(color = "#FF0000", 
                                   weight = 1)) %>%
         addLayersControl(overlayGroups = c("Graticule"),
-                         options = layersControlOptions(collapsed = FALSE)) %>%
-        addMiniMap(
-          tiles = providers$Esri.WorldStreetMap,
-          toggleDisplay = TRUE)
+                         options = layersControlOptions(collapsed = FALSE)) #%>%
+        # addMiniMap(
+        #   tiles = providers$Esri.WorldStreetMap,
+        #   toggleDisplay = TRUE)
       l
     }
     )
@@ -232,29 +510,15 @@ function(input, output, session) {
   # Render a map for react case type
   output$react_map_case_type <-
     renderLeaflet({
-      mag <- area_map[area_map$NAME_2 == 'Magude',]
-      fake_data <- coordinates(mag)
-      fake_data <- data.frame(fake_data)
-      names(fake_data) <- c('lng', 'lat')
-      nrf <- nrow(fake_data)
-      for (i in 1:100){
-        fake_data[nrf + i,] <-
-          c(jitter(fake_data$lng[sample(1:nrf,1)]),
-            jitter(fake_data$lat[sample(1:nrf,1)]))
-      }
-      fake_data$type <-
-        sample(c('Followed-up',
-                 'Not followed-up',
-                 'Member'),
-               nrow(fake_data),
-               replace = TRUE)
-      l <- cism_map_interactive(fake_data$lng,
-                                fake_data$lat,
-                                x = fake_data$type,
-                                spdf = mag)%>%
-        addMiniMap(
-          tiles = providers$Esri.WorldStreetMap,
-          toggleDisplay = TRUE)
+      x <- index_and_membros()
+
+      l <- cism_map_interactive(x$longitude,
+                                x$latitude,
+                                x = x$type,
+                                spdf = mag_map) #%>%
+        # addMiniMap(
+        #   tiles = providers$Esri.WorldStreetMap,
+        #   toggleDisplay = TRUE)
       l
     }
     )
@@ -280,10 +544,10 @@ function(input, output, session) {
       l <- cism_map_interactive(fake_data$lng,
                                 fake_data$lat,
                                 x = fake_data$type,
-                                spdf = mag)%>%
-        addMiniMap(
-          tiles = providers$Esri.WorldStreetMap,
-          toggleDisplay = TRUE)
+                                spdf = mag) #%>%
+        # addMiniMap(
+        #   tiles = providers$Esri.WorldStreetMap,
+        #   toggleDisplay = TRUE)
       l
     }
     )
@@ -309,8 +573,7 @@ function(input, output, session) {
 
     # create plot data
     plot_data <- x %>%
-      filter(date >= today - 30) %>%
-      group_by(administrativePost) %>%
+      group_by(name) %>%
       summarise(index_cases = n(),
                 followed_up = length(which(followed_up)),
                 secondary_cases = sum(secondary_cases, na.rm = TRUE),
@@ -321,21 +584,87 @@ function(input, output, session) {
                         key,
                         value,
                         index_cases: imported_cases)
-    cols <- colorRampPalette(brewer.pal(9, 'Spectral'))(length(unique(long_data$key)))
+    # cols <- colorRampPalette(brewer.pal(9, 'Spectral'))(length(unique(long_data$key)) - 1)
+    cols <- c('darkorange', 'red', 'blue')
     long_data$key <- gsub('_', ' ', long_data$key)
-    ggplot(data = long_data,
-           aes(x = administrativePost,
+    long_data <- long_data %>%
+      mutate(name = gsub('Centro de Saude de |Centro de Saúde de ',
+                         '',
+                         name))
+    ggplot(data = long_data %>%
+             filter(key != 'followed up'),
+           aes(x = name,
                y = value,
                group = key,
                fill = key)) +
       geom_bar(stat = 'identity',
-               position = 'dodge') +
+               position = 'dodge'
+               ) +
       scale_fill_manual(name = '',
                         values = cols) +
       theme_fivethirtyeight() +
       labs(title = 'Action by health facility',
-           subtitle = 'Last 30 days')
+           subtitle = 'Green = followed up; Red = not followed up') +
+      theme(axis.text.x = element_text(angle = 90)) +
+      geom_bar(stat = 'identity',
+               data = long_data %>%
+                 filter(key == 'followed up'),
+               aes(x = name,
+                   y = value),
+               fill = 'green',
+               alpha = 0.9,
+               width = 1/3)
+  })
+  
+  output$hf_details_table <- renderTable({
+    x <- case_index()
+    # # Get whether followed up or not
+    x$followed_up <-
+      x$`Numero de agregado` %in% membros()$`Numero de agregado`
+    # Randomly create how many secondary cases and how import cases, etc.
+    x$secondary_cases <- sample(c(NA, 0, 1, 2, 3),
+                                size = nrow(x),
+                                prob = c(5, 5, 2, 1, 1),
+                                replace = TRUE)
+    # How many imported
+    x$import <- ifelse(is.na(x$secondary_cases), NA, 0)
     
+    # create plot data
+    plot_data <- x %>%
+      group_by(name) %>%
+      summarise(index_cases = n(),
+                followed_up = length(which(followed_up)),
+                secondary_cases = sum(secondary_cases, na.rm = TRUE),
+                imported_cases = sum(import, na.rm = TRUE))
+    plot_data$not_followed_up_yet <- plot_data$index_cases - plot_data$followed_up
+    plot_data$not_followed_up_yet <-
+      ifelse(plot_data$not_followed_up_yet == 0, '',
+             paste0(plot_data$not_followed_up_yet, '  !!!'))
+    for (j in which(!names(plot_data) %in% c('not_followed_up_yet', 'name'))){
+      plot_data[,j] <- round(plot_data[,j])
+    }
+    names(plot_data) <- gsub('_', ' ', names(plot_data))
+    
+    plot_data
+  })
+  
+  output$not_followed_up_yet_table <- renderDataTable({
+    x <- case_index()
+    # # Get whether followed up or not
+    x$followed_up <-
+      x$`Numero de agregado` %in% membros()$`Numero de agregado`
+    x <- x %>%
+      filter(!followed_up) %>%
+      dplyr::select(name,
+                    longitude,
+                    latitude,
+                    additionalInfo,
+                    age,
+                    gender,
+                    headPhone,
+                    Nome,
+                    `Numero de agregado`)
+    x
   })
   
   # Render a map for forecast
@@ -349,10 +678,10 @@ function(input, output, session) {
                     fillOpacity = 0.8,
                     weight = 2,
                     opacity = 0.8) %>%
-        addProviderTiles(providers$Esri.NatGeoWorldMap) %>%
-        addMiniMap(
-          tiles = providers$Esri.WorldStreetMap,
-          toggleDisplay = TRUE)
+        addProviderTiles(providers$Esri.NatGeoWorldMap) #%>%
+        # addMiniMap(
+        #   tiles = providers$Esri.WorldStreetMap,
+        #   toggleDisplay = TRUE)
       l
     }
     )
@@ -451,7 +780,7 @@ function(input, output, session) {
     dd <- malaria()
     stn <- ifelse(nrow(dd) == 1, 'cases', 'cases')
     st <- paste0('Malaria ', stn, ' over last ',
-                 input$days, ' days')
+                 n_days(), ' days')
     valueBox(
       value = nrow(dd),
       color = 'orange',
@@ -463,8 +792,8 @@ function(input, output, session) {
       value = nrow(case_index()),
       color = 'red',
       icon = icon("user", lib = "glyphicon"),
-      subtitle = paste0('index cases over last ',
-                        input$days,
+      subtitle = paste0('index cases over ',
+                        n_days(),
                         ' days'))})
   
   output$hh <- renderValueBox({
@@ -479,11 +808,34 @@ function(input, output, session) {
       subtitle = 'of those households already visited')})
   
   output$reduction <- renderValueBox({
+    fewer_cases <- 
+      magude_cases_all %>%
+      filter(date_week >= date_range()[1],
+             date_week <= date_range()[2]) %>%
+      mutate(period = 'Now') %>%
+      mutate(denom = length(unique(date_week))) %>%
+      dplyr::select(period, week, n, denom)
+    fewer_cases <-
+      fewer_cases %>%
+      bind_rows(retro %>%
+                  filter(year %in% as.character(2014:2015)) %>%
+                  mutate(period = 'Then') %>%
+                  mutate(denom = length(unique(paste0(year, week)))) %>%
+                  dplyr::select(period, week, n, denom))
+    fewer_cases <- fewer_cases %>%
+      group_by(period) %>%
+      summarise(n = sum(n),
+                denom = first(denom)) %>%
+      mutate(daily_cases = n / denom) %>%
+      summarise(x = abs(first(daily_cases) - last(daily_cases))) %>%
+      .$x
+    fewer_cases <- round(fewer_cases)
+
     valueBox(
-      value = 1025,
+      value = fewer_cases,
       color = 'green',
       icon = icon("fire", lib = "glyphicon"),
-      subtitle = 'cases averted last month (relative to Manhiça)')})
+      subtitle = 'fewer daily cases than this period 2014-15')})
   
   output$prediction <- renderValueBox({
     valueBox(
@@ -530,27 +882,6 @@ function(input, output, session) {
       icon = icon("arrow-up", lib = "glyphicon"),
       subtitle = '+ 30 day-old cases not followed up')})
   
-  
-  output$bubbles_plot <- renderBubbles({
-    if (nrow(district()) == 0){
-      message('No rows in district')
-      return()
-    } else {
-      message('Some rows in district')
-      out <- district() %>%
-        group_by(sex = ifelse(sex == '1', 'Male',
-                              ifelse(sex == '2', 'Female', 
-                                     'Unknown'))) %>%
-        tally %>%
-        mutate(sex = ifelse(is.na(sex), 'Unknown', sex))
-      
-      bubbles(value = out$n,
-              color = 'darkgrey',
-              label = out$sex,
-              key = out$sex)
-    }
-  })
-  
   output$react_scenarios <- renderTable({
     out <- data_frame(facility = c('Magude Sede',
                             'Place B', 
@@ -564,20 +895,28 @@ function(input, output, session) {
   output$downloadCsv <- downloadHandler(
     filename = "raw_data.csv",
     content = function(file) {
-      write.csv(district(), file)
+      write.csv(raw_data(), file)
     },
     contentType = "text/csv"
   )
   
-  output$rawtable <- renderPrint({
-    if(input$malaria_only){
-      the_data <- malaria()
-    } else {
-      the_data <- district()
-    }
-    orig <- options(width = 1000)
-    print(tail(the_data, input$maxrows))
-    options(orig)
+  output$rawtable <- renderDataTable({
+    # orig <- options(width = 1000)
+    # print(tail(raw_data(), input$maxrows))
+    # options(orig)
+    raw_data()
   })
+  
+  output$date_range <- renderUI({
+    sliderInput("date_range", 
+                "Choose Date Range:", 
+                min = as.Date('2017-01-01'), 
+                max = Sys.Date(), 
+                value = c(today- 60, 
+                          today - 30)
+    )
+  })
+  
 }
+
 

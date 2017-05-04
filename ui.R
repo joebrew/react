@@ -3,16 +3,16 @@ dashboardPage(
   title = 'MISSION CONTROL CENTER',
   header = dashboardHeader(title = "MISSION CONTROL"),
   sidebar = dashboardSidebar(
-    sliderInput("days", 
-                "View data from the last n days:",
-                min = 0, max = 100, value = 30, step = 1),
+    uiOutput('date_range'),
+    # sliderInput("days", 
+    #             "View data from the last n days:",
+    #             min = 0, max = 100, value = 30, step = 1),
     sidebarMenu(
-      menuItem("General", tabName = "general"),
-      menuItem('React', tabName = 'react'),
-      menuItem('React intervention', tabName = 'react_intervention'),
-      menuItem('Malaria in pregnancy', tabName = 'pregnancy'),
+      menuItem('Surveillance', tabName = 'react'),
+      menuItem('RCD', tabName = 'react_intervention'),
       menuItem('Malaria forecast', tabName = 'forecast'),
       menuItem("Raw data", tabName = "rawdata"),
+      menuItem("General", tabName = "general"),
       menuItem("About", tabName = "about")
     )
   ),
@@ -34,9 +34,6 @@ dashboardPage(
                   footer = textOutput('n_missing_geo_text'),
                   leafletOutput('leaflet_map')
                   # plotOutput('plot1')
-                  # bubblesOutput("bubbles_plot",
-                  #               width = "100%",
-                  #               height = 600)
                 ),
                 box(width = 6,
                     status = 'info',
@@ -49,61 +46,75 @@ dashboardPage(
                 valueBoxOutput('index_cases'),
                 valueBoxOutput('hh'),
                 valueBoxOutput('reduction')),
+              # fluidRow(column(4),
+              #          column(4),
+              #          column(4)),
               fluidRow(
                 column(6,
                        plotOutput('magude_trend')),
                 column(6,
-                       plotOutput('magude_by_health_facility'))
+                       plotOutput('magude_trend_4'))
               ),
+              # fluidRow(column(6,
+              #                 plotOutput('magude_trend_2')),
+              #          column(6,
+              #                 plotOutput('magude_trend_3'))),
               fluidRow(
-                column(6,
-                       leafletOutput('magude_map')),
-                column(6,
-                       plotOutput('magude_trend_by_health_facility'))
-              ),
-              fluidRow(
-                box(
-                  width = 4, 
-                  status = "info",
-                  title = "React scenarios",
-                  tableOutput("react_scenarios")
-                ),
-                box(width = 8,
-                    fluidRow(
-                      column(2,
-                             checkboxGroupInput('scenarios',
-                                           'Show scenarios',
-                                           choices = 1:3,
-                                           selected = 1:3)),
-                      column(10,
-                             leafletOutput('react_map'))
-                    ))
-
-              )
+                column(1),
+                column(10,
+                       plotOutput('magude_trend_by_health_facility')),
+                column(1)),
+              fluidRow(column(2),
+                       column(8,
+                              plotOutput('retro_map')),
+                       column(2)),
+              fluidRow(column(2),
+                       column(8,
+                              plotOutput('risk_map')),
+                       column(2))
       ),
       tabItem("react_intervention",
-              fluidRow(valueBoxOutput("cases_imported"),
-                       valueBoxOutput("cases_not_followed_up"),
-                       valueBoxOutput("cases_not_followed_up_more_7")),
+              # fluidRow(valueBoxOutput("cases_imported"),
+              #          valueBoxOutput("cases_not_followed_up"),
+              #          valueBoxOutput("cases_not_followed_up_more_7")),
               fluidRow(
+                p('NOTE: all references to imported and secondary cases are currently placeholders only'),
                 column(2),
                 column(8,
                        plotOutput('hf_details')),
                 column(2)
               ),
               fluidRow(
+                column(1),
+                p('Below is a table of the same data as the above chart.'),
+                column(10,
+                       tableOutput('hf_details_table')),
+                column(1)
+              ),
+              fluidRow(
+                column(1),
+                column(10,
+                       h2('Index cases which have not yet been followed up'),
+                       p('The below table is interactive and filterable. Click on a column to sort by it. Use the box in the top right to search the whole table, or the boxes at the bottom of the table to search just one column.'),
+                       dataTableOutput('not_followed_up_yet_table')),
+                column(1)
+              ),
+              fluidRow(
+                column(6,
+                       plotOutput('magude_index_by_health_facility')),
+                column(6,
+                       plotOutput('magude_member_by_health_facility'))
+              ),
+              
+              fluidRow(
                 column(6,
                        h3('Follow-up status'),
+                       p('Using real data, lots missing'),
                        leafletOutput('react_map_case_type')),
                 column(6,
                        h3('Imported cases'),
+                       p('Currently using fake data'),
                        leafletOutput('react_map_import'))
-              )),
-      tabItem("pregnancy",
-              fluidRow(
-                column(6,
-                       p('Pending design input from Alfredo.')),
-                column(6)
               )),
       tabItem("forecast",
               fluidRow(
@@ -116,7 +127,7 @@ dashboardPage(
                     title = 'Map of predicted incidence over next two weeks',
                     # p('some text')
                     leafletOutput('forecast_map')
-                    ),
+                ),
                 box(width = 6,
                     status = 'info',
                     title = 'Chart',
@@ -126,11 +137,14 @@ dashboardPage(
               )
       ),
       tabItem("rawdata",
-              numericInput("maxrows", "Rows to show", 25),
-              checkboxInput('malaria_only',
-                            label = 'Only show malaria cases',
-                            value = TRUE),
-              verbatimTextOutput("rawtable"),
+              # numericInput("maxrows", "Rows to show", 25),
+              selectInput('which_data',
+                          'Which data',
+                          choices = c('Index only',
+                                      'Secondary only',
+                                      'Both'),
+                          selected = 'Index only'),
+              dataTableOutput("rawtable"),
               downloadButton("downloadCsv", "Download as CSV")
       ),
       tabItem("about",
