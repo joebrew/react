@@ -25,12 +25,12 @@ password = credentials['dhis2_password']
 from selenium import webdriver
 driver = webdriver.Chrome(driver_loc, chrome_options = options)
 
-driver.get("www.dhis2.org.mz/prod")
+driver.get("https://www.dhis2.org.mz/prod")
 driver.implicitly_wait(10)  # seconds
 
-driver.find_element_by_id("username").send_keys(username)
-driver.find_element_by_id("password").send_keys(password)
-driver.find_element_by_id("login_btn").submit()
+driver.find_element_by_id("j_username").send_keys(username)
+driver.find_element_by_id("j_password").send_keys(password)
+driver.find_element_by_id("submit").submit()
 
 time.sleep(2)
 
