@@ -179,16 +179,6 @@ if(file_name %in% dir('data/')){
                                user = credentials$dhis2_db_username,
                                password = credentials$dhis2_db_password)
   
-  # Amone's query
-  # query <- paste0("SELECT g.name, a.programinstanceid, a.created, a.enrollmentdate, a.incidentdate, a.trackedentityinstanceid, a.programid,
-  #        a.organisationunitid, a.latitude, a.longitude, b.programstageinstanceid, c.value attributevalue, d.code attributecode, d.name attributename,
-  #        e.value dataelementvalue, f.code dataelementcode, f.name dataelementname
-  # FROM programinstance a LEFT JOIN programstageinstance b ON a.programinstanceid = b.programinstanceid
-  #   LEFT JOIN trackedentityattributevalue c ON a.trackedentityinstanceid = c.trackedentityinstanceid
-  #   LEFT JOIN trackedentityattribute d ON c.trackedentityattributeid = d.trackedentityattributeid
-  #   LEFT JOIN trackedentitydatavalue e ON e.programstageinstanceid = b.programstageinstanceid
-  #   LEFT JOIN dataelement f ON e.dataelementid = f.dataelementid
-  #   LEFT JOIN organisationunit g on a.organisationunitid = g.organisationunitid")
   query <- paste0("SELECT g.name, a.programinstanceid, a.created, a.enrollmentdate, a.incidentdate, a.trackedentityinstanceid, a.programid,
                   a.organisationunitid, b.latitude, b.longitude, b.programstageinstanceid, c.value attributevalue, d.code attributecode, d.name attributename,
                   e.value dataelementvalue, f.code dataelementcode, f.name dataelementname
@@ -199,10 +189,8 @@ if(file_name %in% dir('data/')){
                   left JOIN dataelement f ON e.dataelementid = f.dataelementid
                   left JOIN organisationunit g on a.organisationunitid = g.organisationunitid")
   x <- dbGetQuery(psql_connection, query)
+  
   save(x, file = '~/Desktop/temp.RData')
-  # # Filter so that it's all after 23 February
-  # x <- x %>%
-  #   filter(enrollmentdate > '2017-02-23')
   
   # Loop through each program id and make dataframes
   programids <- sort(unique(x$programid))
@@ -267,10 +255,35 @@ if(file_name %in% dir('data/')){
                      '.csv'))
   }
   
+  # Also get data at the U.S. level
+  us_query <- "select f.value, g.startdate, g.enddate, h.name, a.uid dataelementuid, b.code, b.name dataelementname,e.uid categoryoptioncombouid, e.name categoryoptionname
+from datasetelement a inner join dataelement b on a.dataelementid = b.dataelementid left join categorycombo c on a.categorycomboid = c.categorycomboid left join
+categorycombos_optioncombos d on c.categorycomboid = d.categorycomboid inner join categoryoptioncombo e on d.categoryoptioncomboid = e.categoryoptioncomboid inner join
+datavalue f on a.dataelementid = f.dataelementid inner join period g on f.periodid = g.periodid inner join organisationunit h on f.sourceid = h.organisationunitid;"
+  
+  y <- dbGetQuery(psql_connection, us_query)
+  
+  save(y, file = '~/Desktop/temp_us.RData')
+  
+  # Reshape the health facility data
+  us <- y %>%
+    mutate(age_group = unlist(lapply(strsplit(categoryoptionname, ','), function(x){x[1]}))) %>%
+    mutate(type = unlist(lapply(strsplit(categoryoptionname, ','), function(x){x[2]}))) %>%
+    dplyr::select(startdate,
+                  enddate,
+                  name,
+                  code,
+                  age_group,
+                  type,
+                  value) %>%
+    rename(us = name) %>%
+    mutate(us = gsub('Centro de Saude de ', '', us))
+  
   save(program_id_277797,
        # program_id_7132,
        program_id_71885,
        program_id_71914,
+       us,
        file = paste0('data/',
                      file_name))
 }
@@ -416,3 +429,23 @@ case_index_static <-
 district_static <-
   district_static %>%
   left_join(wh, by = 'date')
+
+# Clean up US ##################
+us$value <- as.numeric(as.character(us$value))
+# Get total number of positive us cases
+us_static <- us
+
+us_malaria <- 
+  us_static %>%
+  filter(code == 'positive_rdt') %>%
+  group_by(startdate,
+           enddate,
+           us) %>%
+  summarise(cases = sum(value)) %>%
+  ungroup
+
+# ggplot(data = us_malaria,
+#        aes(x = startdate,
+#            y = cases)) +
+#   facet_wrap(~us) +
+#   geom_line()

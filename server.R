@@ -912,8 +912,8 @@ function(input, output, session) {
                 "Choose Date Range:", 
                 min = as.Date('2017-01-01'), 
                 max = Sys.Date(), 
-                value = c(today- 60, 
-                          today - 30)
+                value = c(today- 30, 
+                          today)
     )
   })
   

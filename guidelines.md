@@ -106,3 +106,18 @@ DONE:- Make malaria risk map with all malaria info from last month
 
 Side note: RRS is not going to give us much info
 - Index case info is now going to come from field (ask Amone about when that change happens)
+
+May 16, 2017
+- Make sure that "secondary" include all contacts followed up (not necessarily cases)
+- Make the "index cases which have not been followed up yet" table only include those cases which went incident in last 3 days
+- Map showing index cases, and secondary cases of last month
+- Risk map moves to surveillance
+    - Show for last 3 months, just passive clinical cases, raster
+- For the points (index and secondary) map, create polygons around each set of belonging
+- For raw data, be able to download the agg rrs data (like Amone's table)
+
+# General
+- See if get SIS-MA credentials (Amone, if he doesn't have, from Fabiao); write (joe) web-scraper to download automatically every time app is run
+
+# Malaria forecast
+- Work with Bea on this.    
