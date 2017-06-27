@@ -5,7 +5,7 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.options import Options
 from shutil import copyfile
 import yaml
-
+# os.chdir('/home/joebrew/Documents/react')
 with open("credentials/credentials.yaml", 'r') as stream:
     try:
         credentials = yaml.load(stream)
@@ -19,14 +19,14 @@ options = webdriver.ChromeOptions()
 options.add_argument("download.default_directory=/home/joebrew/Documents/zambezia/data")
 
 
-# Modify original mintapi code to get to work locally
+# Set stuff up
 username = credentials['dhis2_username']
 password = credentials['dhis2_password']
 from selenium import webdriver
 driver = webdriver.Chrome(driver_loc, chrome_options = options)
 
 driver.get("https://www.dhis2.org.mz/prod")
-driver.implicitly_wait(10)  # seconds
+driver.implicitly_wait(1)  # seconds
 
 driver.find_element_by_id("j_username").send_keys(username)
 driver.find_element_by_id("j_password").send_keys(password)
@@ -34,8 +34,55 @@ driver.find_element_by_id("submit").submit()
 
 time.sleep(2)
 
-# Go to data export
-driver.get("https://sap.manhica.net:4703/redcap/redcap_v6.17.2/DataExport/index.php?pid=87")
+# Go to pivot tables
+driver.get("https://www.dhis2.org.mz/prod/dhis-web-pivot/#")
+
+time.sleep(2)
+
+
+# Click on the upper left box
+# driver.find_element_by_id("ext-gen2057").submit()
+# time.sleep(5)
+actions = ActionChains(driver) 
+actions = actions.send_keys(Keys.TAB)
+actions.perform()
+
+# Click down arrow two times
+N = 2
+actions = ActionChains(driver) 
+for _ in range(N):
+    actions = actions.send_keys(Keys.DOWN)
+actions.perform()
+
+# Press enter
+actions = ActionChains(driver) 
+actions = actions.send_keys(Keys.RETURN)
+actions.perform()
+
+driver.implicitly_wait(5)  # seconds
+
+# Find next button
+actions = ActionChains(driver) 
+actions = actions.send_keys(Keys.TAB)
+actions.perform()
+
+# # Click on the next box down
+# driver.find_element_by_id("ext-gen2101").submit()
+
+N = 18 # number of times to press down
+actions = ActionChains(driver) 
+for _ in range(N):
+    actions = actions.send_keys(Keys.DOWN)
+actions.perform()
+
+# Press enter
+actions = ActionChains(driver) 
+actions = actions.send_keys(Keys.RETURN)
+actions.perform()
+
+# Wait a few seconds
+driver.implicitly_wait(5)  # seconds
+
 
 # driver.find_element_by_link_text("showExportFormatDialog(&#039;ALL&#039;);")
 # driver.execute_script("showExportFormatDialog(&#039;ALL&#039;)")

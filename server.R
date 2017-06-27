@@ -63,7 +63,7 @@ function(input, output, session) {
                     additionalInfo,
                     administrativePost,
                     age,
-                    gender,
+                    # gender,
                     headPhone,
                     index_travel_time,
                     isResident,
@@ -207,9 +207,46 @@ function(input, output, session) {
                  alpha = 0.3,
                  color = 'darkred') +
       theme_cism_map() +
-      labs(title = 'Risk map',
-           subtitle = 'Under construction')
+      labs(title = 'All cases')
     })
+  
+  # Render a risk map
+  output$risk_map_last_month <- renderPlot({
+    # Get locations of index cases
+    x <- case_index() %>%
+      dplyr::select(date,
+                    longitude,
+                    latitude) #%>%
+      # filter(date >= (input$date_range[2] - 30))
+    ggplot() +
+      geom_polygon(data = mag_map_fortified,
+                   aes(x = long,
+                       y = lat,
+                       group = group),
+                   fill = 'blue',
+                   alpha = 0.2,
+                   color = 'black') +
+      coord_map() +
+      geom_jitter(data=x, 
+                  aes(x=longitude, y=latitude),
+                  size = 1,
+                  alpha = 0.3,
+                  color = 'darkred') +
+      theme_cism_map() +
+      labs(title = 'Selected time period only',
+           subtitle = paste0(input$date_range[1],
+                             ' through ',
+                             input$date_range[2]))
+  })
+
+  # Render a raster map
+  output$raster_map <- renderPlot({
+    # Get locations of index cases
+    
+    barplot(1:10,
+            main = 'Placeholder')
+  })
+  
   
   # Render a time series chart
   output$ts <- renderPlot({
@@ -408,10 +445,10 @@ function(input, output, session) {
       cols <- c(cols, 'darkred')
       ggplot(data = retro, 
              aes(x = fake_date, y = n, color = year)) +
-        geom_line(alpha = 0.4) +
+        geom_line(alpha = 0.8) +
         geom_point(alpha = 0.6) +
         geom_smooth(se = FALSE,
-                    alpha = 0.9) +
+                    alpha = 0.3) +
         scale_x_date(labels = date_format("%B")) +
         theme_fivethirtyeight() +
         scale_color_manual(name = '',
@@ -655,15 +692,19 @@ function(input, output, session) {
       x$`Numero de agregado` %in% membros()$`Numero de agregado`
     x <- x %>%
       filter(!followed_up) %>%
-      dplyr::select(name,
+      dplyr::select(date,
+                    name,
                     longitude,
                     latitude,
                     additionalInfo,
                     age,
-                    gender,
+                    # gender,
                     headPhone,
                     Nome,
                     `Numero de agregado`)
+    # Keep only those which were incidentin last 3 days
+    x <- x %>%
+      filter(date >= (input$date_range[2] - 3))
     x
   })
   

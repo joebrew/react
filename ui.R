@@ -69,8 +69,14 @@ dashboardPage(
                               plotOutput('retro_map')),
                        column(2)),
               fluidRow(column(2),
-                       column(8,
+                       column(4,
                               plotOutput('risk_map')),
+                       column(4,
+                              plotOutput('risk_map_last_month'),
+                       column(2))),
+              fluidRow(column(2),
+                       column(8,
+                              plotOutput('raster_map')),
                        column(2))
       ),
       tabItem("react_intervention",
@@ -94,7 +100,7 @@ dashboardPage(
               fluidRow(
                 column(1),
                 column(10,
-                       h2('Index cases which have not yet been followed up'),
+                       h2('Index cases which have not yet been followed up (incidence in last 3 days of time period selected)'),
                        p('The below table is interactive and filterable. Click on a column to sort by it. Use the box in the top right to search the whole table, or the boxes at the bottom of the table to search just one column.'),
                        dataTableOutput('not_followed_up_yet_table')),
                 column(1)
@@ -117,6 +123,7 @@ dashboardPage(
                        leafletOutput('react_map_import'))
               )),
       tabItem("forecast",
+              'Note: placeholder values only (not real data)',
               fluidRow(
                 valueBoxOutput('prediction'),
                 valueBoxOutput('evaluation'),
@@ -170,7 +177,7 @@ dashboardPage(
                 box(width = 4, 
                     status = "primary",
                     title = "Joe Brew",
-                    p('Data visualization'),
+                    p('Engineering, visualization'),
                     a('www.economicsofmalaria.com',
                       href = 'http://www.economicsofmalaria.com')),
                 box(width = 4, 
@@ -182,7 +189,7 @@ dashboardPage(
                 box(width = 4, 
                     status = "primary",
                     title = "Bea Galatas",
-                    p('Design and implementation'),
+                    p('Design'),
                     a('ISGlobal profile',
                       href = 'https://www.isglobal.org/en/person?p_p_id=viewpersona_WAR_intranetportlet&p_p_lifecycle=0&p_p_col_id=column-3&p_p_col_count=1&_viewpersona_WAR_intranetportlet_struts_action=%2Fview%2FpersonaView&_viewpersona_WAR_intranetportlet_typeOfPeople=staff&_viewpersona_WAR_intranetportlet_personaId=4001'))
               )

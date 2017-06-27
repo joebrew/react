@@ -64,6 +64,26 @@ wh <- wh %>%
 wh <- wh %>%
   dplyr::select(date, date_week, month_week, year_week)
 
+# Read in the data manually download from sis-ma and
+# emailed by bea
+bea <- read_csv('data/BES_Magude.csv')
+
+# Join wh stuff to bea
+bea <-
+  bea %>%
+  mutate(year = substr(Period, 1,4),
+         week = substr(Period, 6, nchar(Period))) %>%
+  mutate(year_week = paste0(year, '-', week)) %>%
+  rename(cases = Value) %>%
+  dplyr::select(year_week, cases) %>%
+  left_join(wh %>%
+              dplyr::select(year_week,
+                            month_week,
+                            date_week) %>%
+              filter(!duplicated(year_week)),
+            by = 'year_week')
+
+
 # Read in old OPD Magude data, sent by Bea
 old_opd <- readstata13::read.dta13('data/opd_magude_old/survmag_rrs_dis.dta')
 old_opd <-
@@ -256,7 +276,7 @@ if(file_name %in% dir('data/')){
   }
   
   # Also get data at the U.S. level
-  us_query <- "select f.value, g.startdate, g.enddate, h.name, a.uid dataelementuid, b.code, b.name dataelementname,e.uid categoryoptioncombouid, e.name categoryoptionname
+  us_query <- "select f.value, g.startdate, g.enddate, h.name, b.code, b.name dataelementname,e.uid categoryoptioncombouid, e.name categoryoptionname
 from datasetelement a inner join dataelement b on a.dataelementid = b.dataelementid left join categorycombo c on a.categorycomboid = c.categorycomboid left join
 categorycombos_optioncombos d on c.categorycomboid = d.categorycomboid inner join categoryoptioncombo e on d.categoryoptioncomboid = e.categoryoptioncomboid inner join
 datavalue f on a.dataelementid = f.dataelementid inner join period g on f.periodid = g.periodid inner join organisationunit h on f.sourceid = h.organisationunitid;"
@@ -322,8 +342,8 @@ magude_cases_all <-
   tally %>%
   bind_rows(
     membros_static %>%
-      # ask bea if this is correct
-      filter(react_form_b_rdt_result == 1) %>%
+      filter(as.numeric(as.character(rdt_result)) == 1) %>% 
+      # filter(react_form_b_rdt_result == 1) %>%
       group_by(date) %>% 
       tally
   ) %>%
@@ -343,8 +363,8 @@ magude_cases_all_2 <-
   mutate(index = TRUE) %>%
   bind_rows(
     membros_static %>%
-      # ask bea if this is correct
-      filter(react_form_b_rdt_result == 1) %>%
+      filter(as.numeric(as.character(rdt_result)) == 1) %>% 
+      # filter(react_form_b_rdt_result == 1) %>%
       group_by(date) %>% 
       tally %>%
       mutate(index = FALSE)
@@ -380,8 +400,8 @@ group_by(date,
 
 magude_member_cases_by_health_facility <- 
   membros_static %>%
-  # ask bea if this is correct
-  filter(react_form_b_rdt_result == 1) %>%
+  filter(as.numeric(as.character(rdt_result)) == 1) %>% 
+    # filter(react_form_b_rdt_result == 1) %>%
   # get health facility
   left_join(case_index_static %>%
               dplyr::select(`Numero de agregado`,
