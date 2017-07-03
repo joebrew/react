@@ -238,6 +238,40 @@ function(input, output, session) {
                              ' through ',
                              input$date_range[2]))
   })
+  
+  # Render a risk map
+  output$positive_and_negative_map <- renderPlot({
+    # Get locations of both cases and non cases
+    x <- membros_static %>%
+      dplyr::select(-longitude, -latitude) %>%
+      left_join(case_index_static %>%
+                  dplyr::select(`Numero de agregado`,
+                                longitude,
+                                latitude)) %>%
+      filter(date >= input$date_range[1],
+             date <= input$date_range[2]) %>%
+      mutate(status = ifelse(rdt_result == '1',
+                             'Positive',
+                             'Negative'))
+    ggplot() +
+      geom_polygon(data = mag_map_fortified,
+                   aes(x = long,
+                       y = lat,
+                       group = group),
+                   fill = 'blue',
+                   alpha = 0.2,
+                   color = 'black') +
+      coord_map() +
+      geom_jitter(data=x, 
+                  aes(x=longitude, y=latitude,
+                      color = status),
+                  size = 1,
+                  alpha = 0.3) +
+      theme_cism_map() +
+      labs(title = 'RDT status distribution') +
+      scale_color_manual(name = '',
+                         values = c('darkred', 'darkgreen'))
+  })
 
   # Render a raster map
   output$raster_map <- renderPlot({

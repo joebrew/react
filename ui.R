@@ -76,6 +76,10 @@ dashboardPage(
                        column(2))),
               fluidRow(column(2),
                        column(8,
+                              plotOutput('positive_and_negative_map')),
+                       column(2)),
+              fluidRow(column(2),
+                       column(8,
                               plotOutput('raster_map')),
                        column(2))
       ),
