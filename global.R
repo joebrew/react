@@ -19,6 +19,157 @@ library(sp)
 library(readstata13)
 library(scales)
 library(broom)
+library(rvest)
+library(RSelenium)
+library(httr)
+
+
+# Get all the weeks we want
+add_zero <- function (x, n) 
+{
+  x <- as.character(x)
+  adders <- n - nchar(x)
+  adders <- ifelse(adders < 0, 0, adders)
+  for (i in 1:length(x)) {
+    if (!is.na(x[i])) {
+      x[i] <- paste0(paste0(rep("0", adders[i]), collapse = ""), 
+                     x[i], collapse = "")
+    }
+  }
+  return(x)
+}
+weeks <- expand.grid(year = 2017,
+                       week = add_zero(as.character(28:36), n = 2)) %>%
+  mutate(x = paste0(year, 'W', week)) %>%
+  .$x
+
+# Define a file name for the api
+api_file_name <- paste0('api_', 
+                        Sys.Date(),
+                        '.RData')
+if(api_file_name %in% dir('data')){
+  load(paste0('data/',
+              api_file_name))
+} else {
+  # rd <-rsDriver(verbose =TRUE, browser = 'phantomjs')
+  rd <-rsDriver(verbose =TRUE, browser = 'chrome')
+  remDr <- rd[["client"]]
+  remDr$navigate("https://dbs.manhica.net:4843/dhis/dhis-web-commons/security/login.action")
+  
+  # Log in
+  credentials <- cism::credentials_extract()
+  username_entry <- remDr$findElement(using = 'xpath', '//*[(@id = "j_username")]') # Identify username_entry
+  password_entry <- remDr$findElement(using = 'xpath', '//*[(@id = "j_password")]') # Identify password
+  submit <- remDr$findElement(using = 'xpath', '//*[(@id = "submit")]') # Identify submission
+  username_entry$sendKeysToElement(list(credentials$api_username))
+  password_entry$sendKeysToElement(list(credentials$api_password))
+  submit$clickElement()
+  # Navigate to certain pages
+  navigate <- function(url){
+    remDr$navigate(url)
+    txt<-remDr$findElement(using='css selector',"body")$getElementText()[[1]]
+    out <- jsonlite::fromJSON(txt = txt)
+    return(out)
+  }
+  
+  # Organization units
+  url <- 'https://dbs.manhica.net:4843/dhis/api/27/organisationUnits.json'
+  remDr$navigate(url)
+  txt<-remDr$findElement(using='css selector',"body")$getElementText()[[1]]
+  out <- jsonlite::fromJSON(txt = txt)
+  ou <- out$organisationUnits
+  
+  # Remove Mozambique
+  ou <- ou %>%
+    filter(displayName != 'Mozambique')
+  
+  # Raw data
+  # Loop through each of the organization units, and get the appropriate raw data
+  raw_data_list <- list()
+  counter <- 0
+  for (i in 1:nrow(ou)){
+    this_org_unit <- ou$id[i]
+    message(this_org_unit)
+    this_name <- ou$displayName[i]
+    message(this_name)
+    if(this_name != 'Mozambique'){
+      for(w in 1:length(weeks)){
+        try({
+          counter <- counter + 1
+          # Sys.sleep(0.5)
+          this_week <- weeks[w]
+          message(w)
+          the_url <- paste0('https://dbs.manhica.net:4843/dhis/api/27/dataValueSets.json?orgUnit=',
+                        this_org_unit,
+                        '&period=',
+                        this_week,
+                        # '2017W30',
+                        '&dataSet=KrDJDTu8M7j',
+                        '&children=true')
+          # go the url
+          out <- navigate(url = the_url)
+          # Sys.sleep(1)
+          out <- out$dataValues
+          out$location <- this_name
+          raw_data_list[[counter]] <- out
+        })
+        message('x')
+      }
+      message('y')
+    }
+    message('z')
+  }
+  message('a')
+  rd <- bind_rows(raw_data_list)
+  message()
+  # Then get data elements
+  # https://dbs.manhica.net:4843/dhis/api/dataElements.json
+  de <- navigate('https://dbs.manhica.net:4843/dhis/api/dataElements.json')
+  de <- de$dataElements
+  
+  # Get category combinations
+  cc <- navigate("https://dbs.manhica.net:4843/dhis/api/categoryOptionCombos.json")$categoryOptionCombos
+  
+  # Close the browser
+  remDr$close()
+  # stop the selenium server
+  # rd[["server"]]$stop() 
+  
+  # Join all together
+  api <-
+    # Get data elements
+    left_join(rd %>% 
+                dplyr::select(-attributeOptionCombo, -storedBy, -created, -lastUpdated),
+              de,
+              by = c('dataElement' = 'id')) %>%
+    dplyr::select(-dataElement) %>%
+    rename(data_element = displayName) %>%
+    # Get category combinations 
+    left_join(cc,
+              by = c('categoryOptionCombo' = 'id')) %>%
+    # dplyr::rename(id = categoryOptionCombo) %>%
+    # Get organization units
+    left_join(ou %>%
+                rename(health_post = displayName),
+              by = c('orgUnit' = 'id')) %>%
+    rename(key = data_element,
+           key_display = displayName) %>%
+    # Keep only relevant columns
+    dplyr::select(period,
+                  key, key_display,
+                  value, 
+                  health_post)
+  api <- api %>% filter(!is.na(period))
+  
+  # Get a year week too
+  api <- api %>%
+    mutate(year = as.numeric(substr(period, 1, 4)),
+           week = as.numeric(substr(period, 6, nchar(period)))) %>%
+    mutate(year_week = paste0(year, 'W', week))
+  save(api,
+       file = paste0('data/', api_file_name))
+}
+
 
 # Get a week helper
 wh <- data_frame(date = seq(as.Date('2013-01-01'),
