@@ -1,4 +1,4 @@
-the_date <- Sys.Date() #
+the_date <- Sys.Date() +1
 # the_date <- as.Date('2017-04-27')
 library(tidyverse)
 library(jsonlite)
@@ -45,7 +45,7 @@ weeks <- expand.grid(year = 2017,
 
 # Define a file name for the api
 api_file_name <- paste0('api_', 
-                        Sys.Date(),
+                        the_date,
                         '.RData')
 if(api_file_name %in% dir('data')){
   load(paste0('data/',
