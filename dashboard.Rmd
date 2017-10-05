@@ -1,0 +1,464 @@
+---
+title: "REACT dashboard"
+author: joe@databrew.cc
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    vertical_layout: scroll
+---
+  
+
+```{r, echo = FALSE, warning = FALSE, message = FALSE, comment = NA, error= FALSE, cache = F}
+library(knitr)
+opts_chunk$set(comment = NA, 
+               echo = FALSE, 
+               warning = FALSE, 
+               message = FALSE, 
+               error = TRUE, 
+               cache = FALSE)
+```
+
+```{r, results = 'hide'}
+# Packages
+library(ggplot2)
+library(cism)
+library(rgeos)
+library(maptools)
+library(rgdal)
+library(tidyr)
+library(RColorBrewer)
+library(dplyr)
+library(leaflet)
+library(readr)
+library(ggthemes)
+library(ggrepel)
+library(knitr)
+library(kableExtra)
+options(knitr.table.format = "html") 
+# Define a theme
+theme_maltem <- ggthemes::theme_hc
+library(flexdashboard)
+
+```
+
+```{r}
+# Get data
+source('global.R')
+```
+
+Overview
+=====================================  
+
+
+Row
+-----------------------------------------------------------------------
+
+### Total malaria cases
+
+```{r}
+n <- sum(ts$value[ts$type == 'Case'], na.rm = TRUE)
+flexdashboard::valueBox(n, icon = "fa-stethoscope", href = "#acd")
+```
+
+### Total cases treated
+
+```{r}
+n <- sum(ts$value[ts$type == 'Treated'], na.rm = TRUE)
+flexdashboard::valueBox(n, icon = "fa-flag",
+         color = 'info', href = "#acd")
+```
+
+### Total tests administered
+
+```{r}
+n <- sum(ts$value[ts$type == 'Tested'], na.rm = TRUE)
+flexdashboard::valueBox(n, 
+         icon = "fa-binoculars",
+         color = 'warning', href = "#acd")
+```
+
+
+Row
+-----------------------------------------------------------------------
+
+### Cases at health facilities
+
+```{r}
+n <- sum(ts$value[ts$type == 'Case' & ts$location == 'HF'], na.rm = TRUE)
+flexdashboard::valueBox(n, icon = "fa-vcard", color = 'warning', href = "#pcd")
+```
+
+### Cases from CHWs
+
+```{r}
+n <- sum(ts$value[ts$type == 'Case' & ts$location == 'CHW'], na.rm = TRUE)
+flexdashboard::valueBox(n, icon = "fa-vcard", color = 'danger', href = "#pcd")
+```
+
+### Percent of all cases which are children < 5
+
+```{r}
+n <- ts %>% filter(type == 'Case') %>% group_by(age_group) %>% summarise(x = sum(value, na.rm = TRUE)) %>% mutate(p = x / sum(x) * 100) %>% filter(age_group == '< 5 years') %>% .$p %>% round(digits = 1)
+flexdashboard::valueBox(n, icon = "fa-vcard", color = 'info', href = "#pcd")
+```
+
+
+    
+Row
+-------------------------------------
+    
+### Intervention area
+
+```{r}
+leaflet() %>%
+  # addTiles() %>%
+  addProviderTiles('Esri.WorldImagery') %>%
+  addPolygons(data = cism::mag2, color = 'darkorange')
+```
+
+### Health facility locations
+
+```{r}
+mag_us <- cism::us %>%
+  filter(district == 'MAGUDE')
+
+leaflet() %>%
+  # addTiles() %>%
+  addProviderTiles('Stamen.Toner') %>%
+  addPolylines(data = cism::mag2, color = 'darkorange') %>%
+  addCircleMarkers(lng = mag_us$longitude,
+                   lat = mag_us$latitude,
+                   popup = mag_us$name)
+```
+
+
+
+Aggregate
+=====================================  
+
+
+Row
+-----------------------------------------------------------------------
+
+### All cases
+
+```{r}
+plot_data <- ts %>%
+  filter(type == 'Case') %>%
+  group_by(date) %>%
+  summarise(value = sum(value, na.rm = TRUE))
+ggplot(data = plot_data,
+       aes(x = date,
+           y = value)) +
+  geom_line(color = 'darkgreen', alpha = 0.7) +
+  geom_point(color = 'darkgreen', alpha = 0.7) +
+  geom_area(fill = 'darkgreen', color = NA, alpha = 0.2) +
+  theme_maltem() +
+  labs(x = 'Week',
+       y = 'Cases')
+```
+
+
+### Underlying data
+
+```{r}
+prettify(plot_data, download_options = TRUE)
+```
+
+Row
+-----------------------------------------------------------------------
+
+
+### All consults
+
+```{r}
+plot_data <- ts %>%
+  filter(type == 'Consult') %>%
+  group_by(date) %>%
+  summarise(value = sum(value, na.rm = TRUE))
+ggplot(data = plot_data,
+       aes(x = date,
+           y = value)) +
+  geom_line(color = 'darkgreen', alpha = 0.7) +
+  geom_point(color = 'darkgreen', alpha = 0.7) +
+  geom_area(fill = 'darkgreen', color = NA, alpha = 0.2) +
+  theme_maltem() +
+  labs(x = 'Week',
+       y = 'Consults')
+```
+
+
+### Underlying data
+
+```{r}
+prettify(plot_data, download_options = TRUE)
+```
+
+
+Row
+-----------------------------------------------------------------------
+
+### All tests
+
+```{r}
+plot_data <- ts %>%
+  filter(type == 'Tested') %>%
+  group_by(date) %>%
+  summarise(value = sum(value, na.rm = TRUE))
+ggplot(data = plot_data,
+       aes(x = date,
+           y = value)) +
+  geom_line(color = 'darkgreen', alpha = 0.7) +
+  geom_point(color = 'darkgreen', alpha = 0.7) +
+  geom_area(fill = 'darkgreen', color = NA, alpha = 0.2) +
+  theme_maltem() +
+  labs(x = 'Week',
+       y = 'Tests')
+```
+
+
+### Underlying data
+
+
+```{r}
+prettify(plot_data, download_options = TRUE)
+```
+
+Row
+-----------------------------------------------------------------------
+
+
+### All treatments
+
+```{r}
+plot_data <- ts %>%
+  filter(type == 'Treated') %>%
+  group_by(date) %>%
+  summarise(value = sum(value, na.rm = TRUE))
+ggplot(data = plot_data,
+       aes(x = date,
+           y = value)) +
+  geom_line(color = 'darkgreen', alpha = 0.7) +
+  geom_point(color = 'darkgreen', alpha = 0.7) +
+  geom_area(fill = 'darkgreen', color = NA, alpha = 0.2) +
+  theme_maltem() +
+  labs(x = 'Week',
+       y = 'People treated')
+```
+
+
+### Underlying data
+
+
+```{r}
+prettify(plot_data, download_options = TRUE)
+```
+
+
+
+By health facility
+=====================================  
+
+Row
+-----------------------------------------------------------------------
+
+### Cases
+
+```{r}
+plot_data <- ts %>%
+  filter(type == 'Case') %>%
+  group_by(date, health_post = gsub('Centro de Saude de ', '', health_post)) %>%
+  summarise(value = sum(value, na.rm = TRUE))
+ggplot(data = plot_data,
+       aes(x = date,
+           y = value)) +
+  geom_line(color = 'darkgreen', alpha = 0.7) +
+  geom_point(color = 'darkgreen', alpha = 0.7) +
+  geom_area(fill = 'darkgreen', color = NA, alpha = 0.2) +
+  theme_maltem() +
+  labs(x = 'Week',
+       y = 'Cases') +
+  facet_wrap(~health_post) +
+  theme(axis.text.x = element_text(size = 5, angle = 90))
+```
+
+
+### Underlying data
+
+
+```{r}
+prettify(plot_data, download_options = TRUE)
+```
+
+Row
+-----------------------------------------------------------------------
+
+
+### Consults
+
+```{r}
+plot_data <- ts %>%
+  filter(type == 'Consult') %>%
+  group_by(date, health_post = gsub('Centro de Saude de ', '', health_post)) %>%
+  summarise(value = sum(value, na.rm = TRUE))
+ggplot(data = plot_data,
+       aes(x = date,
+           y = value)) +
+  geom_line(color = 'darkgreen', alpha = 0.7) +
+  geom_point(color = 'darkgreen', alpha = 0.7) +
+  geom_area(fill = 'darkgreen', color = NA, alpha = 0.2) +
+  theme_maltem() +
+  labs(x = 'Week',
+       y = 'Consults') +
+  facet_wrap(~health_post) +
+  theme(axis.text.x = element_text(size = 5, angle = 90))
+
+```
+
+
+### Underlying data
+
+
+```{r}
+prettify(plot_data, download_options = TRUE)
+```
+
+Row
+-----------------------------------------------------------------------
+
+### Tests
+
+```{r}
+plot_data <- ts %>%
+  filter(type == 'Tested') %>%
+  group_by(date, health_post = gsub('Centro de Saude de ', '', health_post)) %>%
+  summarise(value = sum(value, na.rm = TRUE))
+ggplot(data = plot_data,
+       aes(x = date,
+           y = value)) +
+  geom_line(color = 'darkgreen', alpha = 0.7) +
+  geom_point(color = 'darkgreen', alpha = 0.7) +
+  geom_area(fill = 'darkgreen', color = NA, alpha = 0.2) +
+  theme_maltem() +
+  labs(x = 'Week',
+       y = 'Tests') +
+  facet_wrap(~health_post) +
+  theme(axis.text.x = element_text(size = 5, angle = 90))
+
+```
+
+
+### Underlying data
+
+
+```{r}
+prettify(plot_data, download_options = TRUE)
+```
+
+Row
+-----------------------------------------------------------------------
+
+
+### Treatments
+
+```{r}
+plot_data <- ts %>%
+  filter(type == 'Treated') %>%
+  group_by(date, health_post = gsub('Centro de Saude de ', '', health_post)) %>%
+  summarise(value = sum(value, na.rm = TRUE))
+ggplot(data = plot_data,
+       aes(x = date,
+           y = value)) +
+  geom_line(color = 'darkgreen', alpha = 0.7) +
+  geom_point(color = 'darkgreen', alpha = 0.7) +
+  geom_area(fill = 'darkgreen', color = NA, alpha = 0.2) +
+  theme_maltem() +
+  labs(x = 'Week',
+       y = 'People treated') +
+  facet_wrap(~health_post) +
+  theme(axis.text.x = element_text(size = 5, angle = 90))
+
+```
+
+
+### Underlying data
+
+
+```{r}
+prettify(plot_data, download_options = TRUE)
+```
+
+
+Raw data
+=====================================  
+
+Row
+-------------------------------------
+  
+### Time series
+
+```{r}
+prettify(ts, download_options = TRUE)
+```
+
+### API format
+
+```{r}
+prettify(api, download_options = TRUE)
+```
+
+
+Details
+=====================================  
+
+Row
+-------------------------------------
+  
+
+### Data management
+
+```{r}
+flexdashboard::valueBox('Amone Felimone', icon = "fa-database",
+         href="mailto:eldo.elobolobo@manhica.net?Subject=react%20dashboard")
+```
+
+### Visualization
+
+```{r}
+flexdashboard::valueBox('Joe Brew', icon = "fa-eye",
+         href="mailto:joe@databrew.cc?Subject=react%20dashboard")
+```
+
+### Implementation and analysis
+
+```{r}
+flexdashboard::valueBox('Bea Galatas', icon = "fa-stethoscope",
+         href="mailto:carlos.chaccour@isglobal.org?Subject=react%20dashboard")
+```
+
+
+Row
+-------------------------------------
+  
+
+### Coordinating institution
+
+```{r}
+flexdashboard::valueBox('CISM', icon = "fa-users",
+         href="http://www.manhica.org/wp/en/home-en/", color = 'warning')
+```
+
+
+### Collaborating institution
+
+```{r}
+flexdashboard::valueBox('ISGlobal', icon = "fa-group",
+         href="http://www.isglobal.org", color = 'danger')
+```
+
+### Implementation
+
+```{r}
+flexdashboard::valueBox('MALTEM', icon = "fa-flag",
+         href="http://www.manhica.org/wp/en/home-en/", color = 'info')
+```
